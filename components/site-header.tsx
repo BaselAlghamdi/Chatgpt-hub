@@ -1,0 +1,8 @@
+'use client';
+import Link from 'next/link';
+import {usePathname} from 'next/navigation';
+import {useState} from 'react';
+import {ArrowUpRight} from 'lucide-react';
+import {Sheet,SheetTrigger,SheetContent,SheetTitle,SheetDescription} from '@/components/ui/sheet';
+import {defaultProfile,type Profile} from '@/lib/content';
+export function SiteHeader({profile=defaultProfile}:{profile?:Profile}){const contactEmail=profile.email;const[open,setOpen]=useState(false);const path=usePathname();return <header className="site-header"><div className="wrap header-inner"><Link href="/" className="wordmark" aria-label="Basel M. Alghamdi home"><span className="wordmark-name">{profile.name.toUpperCase()}</span></Link><span className="header-descriptor">A JOURNAL OF RESEARCH & IDEAS</span><Sheet open={open} onOpenChange={setOpen}><SheetTrigger className="menu-button" aria-label="Open navigation"><span/><span/><span/></SheetTrigger><SheetContent className="navigation-sheet"><SheetTitle className="nav-title">Explore</SheetTitle><SheetDescription className="nav-description">Basel M. Alghamdi · Research & projects</SheetDescription><nav aria-label="Main navigation">{[['/','Home'],['/research','Research'],['/projects','Projects'],['/about','About']].map(([href,label],i)=><Link key={href} href={href} onClick={()=>setOpen(false)} aria-current={path===href?'page':undefined}><small>0{i+1}</small><span>{label}</span><ArrowUpRight size={24}/></Link>)}</nav><div className="nav-bottom"><span>LET’S CONNECT</span><a href={'mailto:'+contactEmail}>{contactEmail}<ArrowUpRight size={16}/></a></div></SheetContent></Sheet></div></header>}

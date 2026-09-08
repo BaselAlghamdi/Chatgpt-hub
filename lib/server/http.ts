@@ -1,0 +1,7 @@
+import {ContentError} from './data';
+import {ZodError} from 'zod';
+export function json(value:unknown,status=200){return Response.json(value,{status,headers:{'Cache-Control':'no-store'}})}
+export function apiError(error:unknown){if(error instanceof SyntaxError)return json({error:'Invalid JSON.'},400);if(error instanceof ZodError)return json({error:error.errors.map(e=>e.message).join(' ')},400);if(error instanceof ContentError)return json({error:error.message},error.status);console.error('Portfolio request failed',error instanceof Error?error.message:'error');return json({error:'The request could not be completed. Your changes are still here. Please try again.'},503)}
+export async function boundedBody(request:Request,limit:number){if(Number(request.headers.get('content-length')??0)>limit)throw new ContentError('The file or content is too large.',413);if(!request.body)return new Uint8Array();const reader=request.body.getReader();const parts:Uint8Array[]=[];let size=0;try{for(;;){const{done,value}=await reader.read();if(done)break;size+=value.length;if(size>limit){await reader.cancel();throw new ContentError('The file or content is too large.',413)}parts.push(value)}}finally{reader.releaseLock()}const all=new Uint8Array(size);let offset=0;for(const part of parts){all.set(part,offset);offset+=part.length}return all}
+export async function requestJson(request:Request){return JSON.parse(new TextDecoder().decode(await boundedBody(request,220000)))}
+
