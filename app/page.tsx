@@ -1,3 +1,5 @@
+import {pageMetadata} from '@/lib/server/seo';
+export const metadata=pageMetadata('/','Research & Projects','Financial research, valuation models, and projects by Basel Alghamdi.');
 import Link from 'next/link';
 import {ArrowRight,ArrowUpRight} from 'lucide-react';
 import {listEntries,getProfile} from '@/lib/server/data';

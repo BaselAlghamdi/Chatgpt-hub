@@ -8,7 +8,7 @@ registerHooks({
   if(specifier==='server-only')return{url:'data:text/javascript,export {}',shortCircuit:true};
   if(specifier==='next/headers')return{url:new URL('./mock-headers.mjs',import.meta.url).href,shortCircuit:true};
   if(specifier==='next/cache.js')return{url:new URL('./mock-cache.mjs',import.meta.url).href,shortCircuit:true};
-  let path=specifier.startsWith('@/')?root+specifier.slice(2):specifier.startsWith('.')&&context.parentURL?.startsWith('file:')?fileURLToPath(new URL(specifier,context.parentURL)):null;
+  let path=specifier.startsWith('@/')?root+specifier.slice(2):specifier.startsWith('.')&&!context.parentURL?.includes('/node_modules/')&&context.parentURL?.startsWith('file:')?fileURLToPath(new URL(specifier,context.parentURL)):null;
   if(path){for(const suffix of ['', '.ts','.tsx','.mjs'])if(existsSync(path+suffix)&&!path.endsWith('/'))return next(pathToFileURL(path+suffix).href,context)}
   return next(specifier,context);
  },

@@ -1,17 +1,11 @@
-import {z} from 'zod';
+import type {z} from 'zod';
+import type {entryInput,profileInput} from './validation';
 export const kinds=['article','project','certificate','honor'] as const;
 export type EntryKind=typeof kinds[number];
 export const kindLabels:Record<EntryKind,string>={article:'Research',project:'Projects',certificate:'Certifications',honor:'Academic honors'};
 export function validContentUrl(value:string){if(!value)return true;if(/^\/api\/media\/[a-f0-9-]{36}$/.test(value))return true;try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password}catch{return false}}
-const contentUrl=z.string().max(2000).refine(validContentUrl,'Use an uploaded file or a full HTTPS link.');
-const date=z.string().refine(v=>v===''||(/^\d{4}-\d{2}-\d{2}$/.test(v)&&!Number.isNaN(Date.parse(v))&&new Date(v).toISOString().slice(0,10)===v),'Enter a valid date.');
-export const entryInput=z.object({
- id:z.string().uuid().optional(),revision:z.number().int().nonnegative().default(0),kind:z.enum(kinds),title:z.string().trim().min(1,'Add a title.').max(180),slug:z.string().trim().min(1,'Add a URL slug.').max(140).regex(/^[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*$/u,'Use letters, numbers, and single hyphens.'),
- excerpt:z.string().max(800).default(''),body:z.string().max(160000).default(''),category:z.string().max(80).default(''),status:z.enum(['draft','published']).default('draft'),featured:z.boolean().default(false),coverUrl:contentUrl.default(''),coverAlt:z.string().max(220).default(''),issuer:z.string().max(180).default(''),credentialUrl:contentUrl.default(''),date:date.default(''),sortOrder:z.number().int().min(0).max(9999).default(0),tags:z.array(z.string().trim().min(1).max(50)).max(15).default([]),attachments:z.array(z.object({url:contentUrl.refine(v=>!!v,'Add a download URL.'),name:z.string().min(1).max(180),format:z.string().max(20)})).max(10).default([])
-}).superRefine((d,ctx)=>{if(d.status==='published'&&d.coverUrl&&!d.coverAlt.trim())ctx.addIssue({code:'custom',path:['coverAlt'],message:'Describe the cover image for accessibility.'});if(d.kind==='article'&&d.status==='published'&&!d.body.trim())ctx.addIssue({code:'custom',path:['body'],message:'Add article content before publishing.'})});
 export type EntryInput=z.infer<typeof entryInput>;
 export type Entry=EntryInput&{id:string;createdAt:string;updatedAt:string;readingMinutes?:number};
-export const profileInput=z.object({revision:z.number().int().nonnegative().default(0),name:z.string().trim().min(1).max(100),intro:z.string().max(500),bio:z.string().max(8000),university:z.string().max(180),degree:z.string().max(180),faculty:z.string().max(180),gpa:z.string().max(30),location:z.string().max(180),email:z.string().email(),linkedin:z.string().url().refine(v=>{try{const u=new URL(v);return u.protocol==='https:'&&['linkedin.com','www.linkedin.com'].includes(u.hostname)}catch{return false}},'Enter a LinkedIn HTTPS profile URL.'),interests:z.array(z.string().max(100)).max(12)});
 export type Profile=z.infer<typeof profileInput>;
 export const defaultProfile:Profile={revision:0,name:'Basel Alghamdi',intro:'A finance student taking a closer look at businesses, markets, and what drives value.',bio:'I’m a finance student at King Abdulaziz University in Jeddah. I’m interested in how businesses create value and how to put a sensible price on it.\n\nMy interests sit at the intersection of financial statements, business fundamentals, and valuation. I use projects to connect the numbers to the operating decisions behind them.',university:'King Abdulaziz University',degree:'Finance',faculty:'Faculty of Economics & Administration',gpa:'',location:'Jeddah, Saudi Arabia',email:'baselmsalghamdi@gmail.com',linkedin:'https://www.linkedin.com/in/imbasel',interests:['Equity research & business analysis','Financial modeling & valuation','Saudi and global capital markets','Technology and the economics of growth']};
 export const contactEmail=defaultProfile.email;

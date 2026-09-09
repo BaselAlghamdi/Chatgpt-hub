@@ -26,3 +26,15 @@
 @media(max-width:760px){.editor-grid{grid-template-columns:1fr}.admin-topbar{align-items:flex-start;flex-direction:column}.admin-topbar h1{font-size:2.2rem}.admin-list-heading{align-items:flex-end}.admin-list-heading .button{max-width:45%}.admin-entry{align-items:flex-start}.admin-entry .admin-actions{flex-direction:column;align-items:flex-end}.editor-sidebar{display:grid;grid-template-columns:1fr;gap:0}.about-strip{grid-template-columns:1fr}.credential-grid{grid-template-columns:1fr}.journal-empty{min-height:290px;padding:30px 26px}.education-detail{grid-template-columns:1fr}.honors-section .credential-card{grid-template-columns:1fr}.honors-section .credential-card img{height:220px}.contact-address{font-size:.875rem}.admin-login{padding:25px}.admin-tabs [data-slot=tabs-trigger]{padding:10px;font-size:.875rem}.wordmark-name{font-size:.75rem}.about-profile-card{padding:30px}.header-descriptor{display:none}.footer-main nav{gap:16px}}
 @media print{.article-toc,.article-tools,.site-header,.site-footer,.reading-progress{display:none!important}.article-layout{display:block}.article-body{font-size:12pt}.wrap{width:100%}.article-body pre{white-space:pre-wrap}.article-body table{min-width:0}.article-hero img{max-height:300px}a{color:inherit!important}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{transition:none!important;animation:none!important}}
+
+/* Audit: preserve layout while allowing narrow screens and long content. */
+.navigation-sheet{overflow-y:auto;overscroll-behavior:contain}
+.wordmark{min-width:0}.wordmark-name{overflow-wrap:anywhere}
+h1,.lead,.breadcrumb{overflow-wrap:anywhere}.breadcrumb{flex-wrap:wrap}
+.project-detail>div,.about-strip>div{min-width:0}
+.article-body .markdown-image,.article-body .markdown-caption{display:block}
+.article-body .markdown-caption{font:.875rem var(--body-font);color:var(--muted-foreground);margin-bottom:22px}
+.section-index{color:var(--muted-foreground)}
+@media(max-width:1100px){.about-strip{grid-template-columns:1fr}}
+
+.menu-button{flex-shrink:0}.nav-bottom a{min-width:0}.nav-bottom svg{flex-shrink:0}
