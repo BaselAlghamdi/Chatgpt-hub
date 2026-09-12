@@ -1,5 +1,17 @@
 # Website audit and fixes
 
+## Follow-up implementation, 10 September 2026
+
+- Private media publication now derives from rendered Markdown destinations. Existing associations are rechecked against current published content before serving files.
+- Public/admin lists request card fields instead of full Markdown. Full content is retrieved for detail/editor and paginated backup only; reading time is persisted on save.
+- Backup downloads include uploaded bytes and SHA-256 checksums, with bounded authenticated pages and a 64 MB browser limit. Import validates first and creates draft copies. Profile restore is separate and revision-protected. Backups are not a database snapshot during concurrent edits; external files remain URLs.
+- Password recovery is available in the login form with generic responses and a trusted configured redirect. Supabase must allow the exact SITE_URL plus `/desk-65efdcc4b137b000/reset-password`; actual email delivery was not tested.
+- Unsaved edits can be recovered in the same browser tab. Recovery requires explicit action and retains the old revision to prevent silent overwrites. Copies clear on save/delete/logout; this is not permanent storage.
+- Profile saves refresh the layout; missing search results are explained; validation errors identify their field paths.
+- Honor cards without images use full width; heading entities and Arabic fragment links are handled; card links have contextual accessible names.
+- Follow-up automated suite: 50 tests passed. Live administrator writes, password sends and restore were not exercised against production.
+
+
 Date: 9 September 2026. Base commit: `8a65e9b58a53cb4378bc73c6b9283f1226d4f328`.
 
 Scope: application source, server routes, Markdown, database migration, dependency audit, production compilation, local HTTP responses, and public browser navigation. The approved forest-green editorial design is retained. No live database records, credentials, or Supabase settings were changed.

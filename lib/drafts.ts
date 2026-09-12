@@ -1,0 +1,7 @@
+import {kinds,type EntryInput,type Profile} from './content';
+export const DRAFT_PREFIX='portfolio-draft:';
+const object=(v:unknown):v is Record<string,unknown>=>typeof v==='object'&&v!==null&&!Array.isArray(v);
+const strings=(v:unknown):v is string[]=>Array.isArray(v)&&v.every(x=>typeof x==='string');
+export function isEntryDraft(v:unknown):v is EntryInput{return object(v)&&['title','slug','excerpt','body','category','coverUrl','coverAlt','issuer','credentialUrl','date'].every(k=>typeof v[k]==='string')&&kinds.includes(v.kind as typeof kinds[number])&&(v.status==='draft'||v.status==='published')&&typeof v.featured==='boolean'&&Number.isInteger(v.revision)&&Number.isFinite(v.sortOrder)&&strings(v.tags)&&Array.isArray(v.attachments)&&v.attachments.every(a=>object(a)&&['name','url','format'].every(k=>typeof a[k]==='string'))&&(v.id===undefined||typeof v.id==='string')}
+export function isProfileDraft(v:unknown):v is Profile{return object(v)&&['name','intro','bio','university','degree','faculty','gpa','location','email','linkedin'].every(k=>typeof v[k]==='string')&&Number.isInteger(v.revision)&&strings(v.interests)}
+export function parseDraft<T>(raw:string|null,valid:(v:unknown)=>v is T):{value:T;updatedAt:string}|null{try{if(!raw||raw.length>1_000_000)return null;const v=JSON.parse(raw);return object(v)&&v.version===1&&typeof v.updatedAt==='string'&&valid(v.value)?{value:v.value,updatedAt:v.updatedAt}:null}catch{return null}}

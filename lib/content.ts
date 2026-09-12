@@ -15,4 +15,3 @@ export function entryLink(e:Pick<Entry,'kind'|'slug'>){return e.kind==='article'
 export function displayDate(value:string){return value?new Intl.DateTimeFormat('en-GB',{day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(value)):''}
 export function readTime(body:string){return Math.max(1,Math.ceil(body.trim().split(/\s+/).length/230))}
 export function slugify(value:string){return value.toLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}]+/gu,'-').replace(/^-|-$/g,'').slice(0,130)}
-export function assetReferences(input:EntryInput){const s=[input.coverUrl,input.credentialUrl,input.body,...input.attachments.map(x=>x.url)].join('\n');return [...new Set([...s.matchAll(/\/api\/media\/([a-f0-9-]{36})/g)].map(x=>x[1]))]}

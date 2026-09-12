@@ -38,3 +38,8 @@ h1,.lead,.breadcrumb{overflow-wrap:anywhere}.breadcrumb{flex-wrap:wrap}
 @media(max-width:1100px){.about-strip{grid-template-columns:1fr}}
 
 .menu-button{flex-shrink:0}.nav-bottom a{min-width:0}.nav-bottom svg{flex-shrink:0}
+.honors-section .credential-card:not(.has-image){grid-template-columns:minmax(0,1fr)}
+.credential-card h4{font-size:1.5rem;margin:12px 0}
+.backup-tools{border:1px solid var(--border);padding:20px;margin-bottom:24px}
+.backup-tools summary{cursor:pointer;font-weight:600}
+.backup-tools p{margin-block:16px}

@@ -1,6 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {renderMarkdown,safeLink} from '../lib/markdown.ts';
-import {newEntry,defaultProfile,assetReferences,slugify} from '../lib/content.ts';
+import {newEntry,defaultProfile,slugify} from '../lib/content.ts';
+import {assetReferences} from '../lib/server/asset-references.ts';
 import {entryInput,profileInput} from '../lib/validation.ts';
 import {inspectUpload,MAX_UPLOAD} from '../lib/uploads.ts';
 const uuid='11111111-1111-4111-8111-111111111111';
