@@ -1,0 +1,1 @@
+export default function ResearchLoading(){return <main id="main-content" className="wrap page-intro" aria-busy="true" aria-label="Loading research"><p className="eyebrow">RESEARCH</p><h1>Loading research…</h1><div className="loading-lines" aria-hidden="true"><span/><span/><span/></div></main>}
