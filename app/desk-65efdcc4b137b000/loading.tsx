@@ -1,0 +1,1 @@
+export default function DeskLoading(){return <main id="main-content" className="wrap admin-page" aria-busy="true" aria-label="Loading publishing desk"><p className="eyebrow">PRIVATE PUBLISHING DESK</p><h1>Opening your workspace…</h1><div className="loading-lines" aria-hidden="true"><span/><span/><span/></div></main>}

@@ -1,0 +1,69 @@
+'use client';
+
+import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
+import {EditorContent,useEditor,type JSONContent} from '@tiptap/react';
+import {BubbleMenu} from '@tiptap/react/menus';
+import {researchExtensions} from './editor-config';
+import {renderMarkdown} from '@/lib/markdown';
+import {supportedEmbed} from './extensions';
+
+export type RichDocument=JSONContent&{type:'doc'};
+type Props={value:RichDocument|null;legacyMarkdown:string;onChange:(value:RichDocument,plainText:string)=>void;disabled?:boolean};
+type Upload={url:string;name:string;format:string};
+const callouts=[['takeaway','Key Takeaway'],['thesis','Investment Thesis'],['catalyst','Catalyst'],['risk','Risk'],['valuation','Valuation'],['important','Important'],['note','Note'],['warning','Warning']] as const;
+
+async function uploadFile(file:File,onProgress:(label:string)=>void):Promise<Upload>{
+ if(file.size>4*1024*1024)throw new Error('Maximum upload size is 4 MB.');
+ onProgress('Uploading '+file.name+'…');
+ const response=await fetch('/api/desk-65efdcc4b137b000/upload',{method:'POST',headers:{'x-filename':encodeURIComponent(file.name),'Content-Type':'application/octet-stream'},body:file});
+ const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.error||'Upload failed.');return result;
+}
+
+export default function RichResearchEditor({value,legacyMarkdown,onChange,disabled=false}:Props){
+ const imagePicker=useRef<HTMLInputElement>(null),galleryPicker=useRef<HTMLInputElement>(null);
+ const[uploadState,setUploadState]=useState('');const[error,setError]=useState('');const[fullscreen,setFullscreen]=useState(false);const[slash,setSlash]=useState<{from:number;query:string}|null>(null);
+ const initialContent=useMemo(()=>value||renderMarkdown(legacyMarkdown).html||'<p></p>',[]);// editor owns later updates
+ const editor=useEditor({immediatelyRender:false,editable:!disabled,content:initialContent,extensions:researchExtensions(),editorProps:{attributes:{class:'rich-editor-content','aria-label':'Research article content'},handleKeyDown:(_view,event)=>{if(event.key==='Escape')setSlash(null);return false}},onUpdate:({editor:e})=>{const json=e.getJSON() as RichDocument;onChange(json,e.getText({blockSeparator:'\n\n'}));const{$from}=e.state.selection;const before=$from.parent.textBetween(0,$from.parentOffset,'\0','\0');const match=/(?:^|\s)\/([^\s/]*)$/.exec(before);setSlash(match?{from:$from.pos-match[1].length-1,query:match[1].toLowerCase()}:null)}});
+ useEffect(()=>{editor?.setEditable(!disabled)},[editor,disabled]);
+ useEffect(()=>{if(!fullscreen)return;const close=(e:KeyboardEvent)=>{if(e.key==='Escape')setFullscreen(false)};document.addEventListener('keydown',close);return()=>document.removeEventListener('keydown',close)},[fullscreen]);
+ const addImages=useCallback(async(files:File[],gallery=false)=>{if(!editor||!files.length)return;setError('');try{const uploaded=[];for(const file of files){if(!file.type.startsWith('image/'))throw new Error('Choose JPG, PNG, WebP, or GIF images.');uploaded.push(await uploadFile(file,setUploadState))}if(gallery||uploaded.length>1)editor.chain().focus().insertContent({type:'gallery',attrs:{images:uploaded.map((item,index)=>({src:item.url,alt:'',caption:files[index].name}))}}).run();else editor.chain().focus().insertContent({type:'financeImage',attrs:{src:uploaded[0].url,alt:'',caption:files[0].name,display:'content',width:100}}).run();setUploadState('Upload complete. Add alt text before publishing.')}catch(e){setError((e as Error).message);setUploadState('')}},[editor]);
+ if(!editor)return <div className="rich-editor-loading" role="status">Opening editor…</div>;
+ const insertLink=()=>{const previous=editor.getAttributes('link').href||'';const value=prompt('HTTPS link',previous);if(value===null)return;if(!value.trim())editor.chain().focus().extendMarkRange('link').unsetLink().run();else{try{const url=new URL(value.includes('://')?value:'https://'+value);if(url.protocol!=='https:'||url.username||url.password)throw 0;editor.chain().focus().extendMarkRange('link').setLink({href:url.href}).run()}catch{setError('Enter a valid web link.')}}};
+ const insertEquation=(inline=false)=>{const latex=prompt('Enter LaTeX (for example: WACC = E/V \\times R_e + D/V \\times R_d(1-T))');if(latex?.trim())editor.chain().focus().insertContent({type:inline?'inlineEquation':'equation',attrs:{latex:latex.trim().slice(0,4000)}}).run()};
+ const insertFootnote=()=>{const text=prompt('Footnote or source');if(text?.trim())editor.chain().focus().insertContent({type:'footnote',attrs:{text:text.trim().slice(0,4000)}}).run()};
+ const insertEmbed=()=>{const input=prompt('Paste a YouTube, Spotify, X, or Datawrapper HTTPS URL');if(!input)return;const embed=supportedEmbed(input);if(!embed){setError('This embed provider or URL is not supported.');return}editor.chain().focus().insertContent({type:'safeEmbed',attrs:embed}).run()};
+ const insertAudio=()=>{const input=prompt('Paste a direct HTTPS audio URL');if(!input)return;try{const url=new URL(input);if(url.protocol!=='https:')throw 0;editor.chain().focus().insertContent({type:'audio',attrs:{src:url.href,title:'Audio',caption:''}}).run()}catch{setError('Enter a valid HTTPS audio URL.')}};
+ const insertCallout=(kind:typeof callouts[number][0]=callouts[0][0],title:string=callouts[0][1])=>editor.chain().focus().insertContent({type:'callout',attrs:{kind,title},content:[{type:'paragraph'}]}).run();
+ const commands=[
+  {label:'Heading 2',keywords:'heading section',run:()=>editor.chain().focus().setHeading({level:2}).run()},
+  {label:'Image',keywords:'image chart upload',run:()=>imagePicker.current?.click()},
+  {label:'Gallery',keywords:'gallery images charts',run:()=>galleryPicker.current?.click()},
+  {label:'Financial table',keywords:'table spreadsheet',run:()=>editor.chain().focus().insertTable({rows:3,cols:4,withHeaderRow:true}).run()},
+  {label:'Callout',keywords:'thesis takeaway risk catalyst',run:()=>insertCallout()},
+  {label:'Quote',keywords:'quote',run:()=>editor.chain().focus().toggleBlockquote().run()},
+  {label:'Divider',keywords:'divider rule',run:()=>editor.chain().focus().setHorizontalRule().run()},
+  {label:'Equation',keywords:'latex math formula',run:()=>insertEquation()},
+  {label:'Code',keywords:'code',run:()=>editor.chain().focus().toggleCodeBlock().run()},
+  {label:'Video or embed',keywords:'youtube spotify x datawrapper embed',run:insertEmbed},
+  {label:'Audio',keywords:'audio podcast',run:insertAudio},
+  {label:'Table of contents',keywords:'toc contents',run:()=>editor.chain().focus().insertContent({type:'tableOfContents'}).run()}
+ ];
+ const runSlash=(run:()=>void)=>{if(slash)editor.chain().focus().deleteRange({from:slash.from,to:editor.state.selection.from}).run();setSlash(null);run()};
+ const visibleCommands=commands.filter(c=>(c.label+' '+c.keywords).toLowerCase().includes(slash?.query||''));
+ return <div className={'rich-editor-shell '+(fullscreen?'is-fullscreen':'')}>
+  <div className="rich-editor-toolbar" role="toolbar" aria-label="Research formatting toolbar">
+   <select aria-label="Paragraph style" value={editor.isActive('heading',{level:1})?'1':editor.isActive('heading',{level:2})?'2':editor.isActive('heading',{level:3})?'3':'p'} onChange={e=>{const v=e.target.value;v==='p'?editor.chain().focus().setParagraph().run():editor.chain().focus().setHeading({level:Number(v) as 1|2|3}).run()}}><option value="p">Paragraph</option><option value="1">Heading 1</option><option value="2">Heading 2</option><option value="3">Heading 3</option></select>
+   <Tool label="Bold" active={editor.isActive('bold')} onClick={()=>editor.chain().focus().toggleBold().run()}>B</Tool><Tool label="Italic" active={editor.isActive('italic')} onClick={()=>editor.chain().focus().toggleItalic().run()}><em>I</em></Tool><Tool label="Underline" active={editor.isActive('underline')} onClick={()=>editor.chain().focus().toggleUnderline().run()}><u>U</u></Tool><Tool label="Strikethrough" active={editor.isActive('strike')} onClick={()=>editor.chain().focus().toggleStrike().run()}><s>S</s></Tool><Tool label="Superscript" active={editor.isActive('superscript')} onClick={()=>editor.chain().focus().toggleSuperscript().run()}>x²</Tool><Tool label="Subscript" active={editor.isActive('subscript')} onClick={()=>editor.chain().focus().toggleSubscript().run()}>x₂</Tool>
+   <Tool label="Bulleted list" active={editor.isActive('bulletList')} onClick={()=>editor.chain().focus().toggleBulletList().run()}>• List</Tool><Tool label="Numbered list" active={editor.isActive('orderedList')} onClick={()=>editor.chain().focus().toggleOrderedList().run()}>1. List</Tool><Tool label="Quote" active={editor.isActive('blockquote')} onClick={()=>editor.chain().focus().toggleBlockquote().run()}>Quote</Tool><Tool label="Link" active={editor.isActive('link')} onClick={insertLink}>Link</Tool>
+   <Tool label="Insert table" onClick={()=>editor.chain().focus().insertTable({rows:3,cols:4,withHeaderRow:true}).run()}>Table</Tool><Tool label="Insert image" onClick={()=>imagePicker.current?.click()}>Image</Tool><Tool label="Insert equation" onClick={()=>insertEquation()}>Equation</Tool><Tool label="Insert footnote" onClick={insertFootnote}>Footnote</Tool><Tool label="Undo" disabled={!editor.can().undo()} onClick={()=>editor.chain().focus().undo().run()}>Undo</Tool><Tool label="Redo" disabled={!editor.can().redo()} onClick={()=>editor.chain().focus().redo().run()}>Redo</Tool><select aria-label="Text alignment" onChange={e=>editor.chain().focus().setTextAlign(e.target.value).run()} defaultValue="left"><option value="left">Align left</option><option value="center">Center</option><option value="right">Align right</option><option value="justify">Justify</option></select><Tool label="Clear formatting" onClick={()=>editor.chain().focus().unsetAllMarks().clearNodes().run()}>Clear</Tool><Tool label={fullscreen?'Exit expanded writing':'Expand writing'} onClick={()=>setFullscreen(v=>!v)}>{fullscreen?'Exit':'Expand'}</Tool>
+  </div>
+  <details className="rich-insert-menu"><summary>Insert research block</summary><div>{callouts.map(([kind,title])=><button key={kind} type="button" onClick={()=>insertCallout(kind,title)}>{title}</button>)}<button type="button" onClick={()=>galleryPicker.current?.click()}>Gallery</button><button type="button" onClick={()=>insertEquation(true)}>Inline equation</button><button type="button" onClick={insertEmbed}>Video / embed</button><button type="button" onClick={insertAudio}>Audio</button><button type="button" onClick={()=>editor.chain().focus().insertContent({type:'tableOfContents'}).run()}>Table of contents</button></div></details>
+  {editor.isActive('table')&&<div className="rich-table-tools" role="toolbar" aria-label="Table editing"><button type="button" onClick={()=>editor.chain().focus().addRowAfter().run()}>Add row</button><button type="button" onClick={()=>editor.chain().focus().deleteRow().run()}>Delete row</button><button type="button" onClick={()=>editor.chain().focus().addColumnAfter().run()}>Add column</button><button type="button" onClick={()=>editor.chain().focus().deleteColumn().run()}>Delete column</button><button type="button" onClick={()=>editor.chain().focus().toggleHeaderRow().run()}>Header row</button><button type="button" onClick={()=>editor.chain().focus().toggleHeaderColumn().run()}>Header column</button><button type="button" onClick={()=>editor.chain().focus().deleteTable().run()}>Delete table</button></div>}
+  <BubbleMenu editor={editor} options={{placement:'top'}}><div className="rich-bubble-toolbar"><Tool label="Bold" active={editor.isActive('bold')} onClick={()=>editor.chain().focus().toggleBold().run()}>B</Tool><Tool label="Italic" active={editor.isActive('italic')} onClick={()=>editor.chain().focus().toggleItalic().run()}>I</Tool><Tool label="Underline" active={editor.isActive('underline')} onClick={()=>editor.chain().focus().toggleUnderline().run()}>U</Tool><Tool label="Link" active={editor.isActive('link')} onClick={insertLink}>Link</Tool></div></BubbleMenu>
+  <div className="rich-editor-dropzone" onDragOver={e=>{if([...e.dataTransfer.items].some(i=>i.kind==='file'))e.preventDefault()}} onDrop={e=>{const files=[...e.dataTransfer.files].filter(f=>f.type.startsWith('image/'));if(files.length){e.preventDefault();void addImages(files,files.length>1)}}} onPaste={e=>{const files=[...e.clipboardData.files].filter(f=>f.type.startsWith('image/'));if(files.length){e.preventDefault();void addImages(files,files.length>1)}}}><EditorContent editor={editor}/>{slash&&visibleCommands.length>0&&<div className="rich-slash-menu" role="menu" aria-label="Insert block">{visibleCommands.map((command,index)=><button role="menuitem" type="button" key={command.label} onClick={()=>runSlash(command.run)}>{command.label}</button>)}</div>}</div>
+  <input hidden ref={imagePicker} type="file" accept=".jpg,.jpeg,.png,.webp,.gif" onChange={e=>{const files=[...e.target.files||[]];if(files.length)void addImages(files);e.target.value=''}}/><input hidden ref={galleryPicker} type="file" multiple accept=".jpg,.jpeg,.png,.webp,.gif" onChange={e=>{const files=[...e.target.files||[]];if(files.length)void addImages(files,true);e.target.value=''}}/>
+  <div className="rich-editor-status"><span>{editor.storage.characterCount.words()} words · {Math.max(1,Math.ceil(editor.storage.characterCount.words()/230))} min read</span><span role="status">{uploadState}</span></div>{error&&<p role="alert" className="form-error">{error}</p>}
+ </div>
+}
+
+function Tool({label,active=false,disabled=false,onClick,children}:{label:string;active?:boolean;disabled?:boolean;onClick:()=>void;children:React.ReactNode}){return <button type="button" aria-label={label} title={label} aria-pressed={active||undefined} className={active?'is-active':''} disabled={disabled} onClick={onClick}>{children}</button>}
