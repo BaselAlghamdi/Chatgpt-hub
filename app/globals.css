@@ -43,3 +43,7 @@ h1,.lead,.breadcrumb{overflow-wrap:anywhere}.breadcrumb{flex-wrap:wrap}
 .backup-tools{border:1px solid var(--border);padding:20px;margin-bottom:24px}
 .backup-tools summary{cursor:pointer;font-weight:600}
 .backup-tools p{margin-block:16px}
+
+/* Keep navigation available without removing it from document flow. */
+.site-header{position:sticky;top:0;z-index:40}
+@media print{.site-header{position:static}}

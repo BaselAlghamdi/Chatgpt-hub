@@ -1,4 +1,5 @@
 import 'server-only';
+import {cache} from 'react';
 import {unstable_cache} from 'next/cache.js';
 import {configured,rest,service} from './supabase';
 import {defaultProfile,readTime,type Entry,type EntryInput,type EntryKind,type Profile} from '@/lib/content';
@@ -9,18 +10,18 @@ function decode(row:Row):Entry{return{...row.data,id:row.id,revision:row.revisio
 const select='id,data,revision,created_at,updated_at';
 function filter(key:string,value:string){return '&'+key+'=eq.'+encodeURIComponent(value)}
 async function allRows(path:string){const result:any[]=[];for(let offset=0;;){const rows=await rest(path+'&limit=200&offset='+offset);if(!Array.isArray(rows))throw new Error('Invalid content response.');if(!rows.length)return result;result.push(...rows);offset+=rows.length;if(result.length>100000)throw new ContentError('Export exceeds the supported record limit. No partial export was returned.',413)}}
-async function summaries(kind?:EntryKind,publishedOnly=true):Promise<Entry[]>{const rows=await rest('portfolio_entries?select='+select+(kind?filter('kind',kind):'')+(publishedOnly?filter('status','published'):'')+'&order=featured.desc,sort_order.asc,date.desc,created_at.desc&limit=500');if(!Array.isArray(rows))throw new Error('Invalid content response.');return rows.map(row=>{const entry=decode(row);return{...entry,body:'',readingMinutes:typeof entry.readingMinutes==='number'?entry.readingMinutes:undefined}})}
+async function summaries(kind?:EntryKind,publishedOnly=true):Promise<Entry[]>{const rows=await rest('portfolio_entries?select='+select+(kind?filter('kind',kind):'')+(publishedOnly?filter('status','published'):'')+'&order=featured.desc,sort_order.asc,date.desc,created_at.desc&limit=500',{},publishedOnly?6000:20000);if(!Array.isArray(rows))throw new Error('Invalid content response.');return rows.map(row=>{const entry=decode(row);return{...entry,body:'',readingMinutes:typeof entry.readingMinutes==='number'?entry.readingMinutes:undefined}})}
 const cachedPublishedEntries=unstable_cache(summaries,['portfolio-published-summaries-v4',process.env.SUPABASE_URL||'unconfigured'],{revalidate:60,tags:['portfolio-content']});
 export async function listEntries(kind?:EntryKind,publishedOnly=true):Promise<Entry[]>{if(!configured())return[];return publishedOnly?cachedPublishedEntries(kind,true):summaries(kind,false)}
 export async function exportEntries():Promise<Entry[]>{return(await allRows('portfolio_entries?select='+select+'&order=id.asc')).map(decode)}
 export async function getEntry(id:string){if(!/^[a-f0-9-]{36}$/.test(id))return null;const rows=await rest('portfolio_entries?select='+select+filter('id',id)+'&limit=1');return rows[0]?decode(rows[0]):null}
-const cachedPublishedEntry=unstable_cache(async(kind:EntryKind,slug:string)=>{const rows=await rest('portfolio_entries?select='+select+filter('kind',kind)+filter('slug',slug)+filter('status','published')+'&limit=1');return rows[0]?decode(rows[0]):null},['portfolio-published-entry',process.env.SUPABASE_URL||'unconfigured'],{revalidate:60,tags:['portfolio-content']});
+const cachedPublishedEntry=unstable_cache(async(kind:EntryKind,slug:string)=>{const rows=await rest('portfolio_entries?select='+select+filter('kind',kind)+filter('slug',slug)+filter('status','published')+'&limit=1',{},6000);return rows[0]?decode(rows[0]):null},['portfolio-published-entry',process.env.SUPABASE_URL||'unconfigured'],{revalidate:60,tags:['portfolio-content']});
 export async function getPublishedEntry(kind:EntryKind,slug:string){if(!configured())return null;return cachedPublishedEntry(kind,slug)}
 export async function saveEntry(input:EntryInput):Promise<Entry>{try{const row=await rest('rpc/portfolio_save_entry',{method:'POST',body:JSON.stringify({payload:{...input,readingMinutes:readTime(input.body)},asset_ids:assetReferences(input)})});return decode(row)}catch(e){const x=e as Error&{code?:string};if(x.code==='23505')throw new ContentError('That URL slug is already used. Choose another.',409);if(x.code==='40001')throw new ContentError('This content changed in another window. Copy your changes and reload before saving.',409);if(x.code==='23503')throw new ContentError('An uploaded file is missing. Upload it again.');throw e}}
 export async function deleteEntry(id:string,revision:number){const rows=await rest('portfolio_entries?id=eq.'+encodeURIComponent(id)+'&revision=eq.'+revision,{method:'DELETE',headers:{Prefer:'return=representation'}});if(!rows.length)throw new ContentError('The entry changed or was already removed. Refresh the list.',409)}
-async function readProfile(){const rows=await rest('portfolio_settings?key=eq.profile&select=value,revision');return rows[0]?{...defaultProfile,...rows[0].value,revision:rows[0].revision}:defaultProfile}
-const cachedProfile=unstable_cache(readProfile,['portfolio-profile',process.env.SUPABASE_URL||'unconfigured'],{revalidate:60,tags:['portfolio-content']});
-export async function getProfile(fresh=false):Promise<Profile>{if(!configured())return defaultProfile;if(fresh)return readProfile();try{return await cachedProfile()}catch{return defaultProfile}}
+async function readProfile(timeoutMs=20000){const rows=await rest('portfolio_settings?key=eq.profile&select=value,revision',{},timeoutMs);return rows[0]?{...defaultProfile,...rows[0].value,revision:rows[0].revision}:defaultProfile}
+const cachedProfile=unstable_cache(()=>readProfile(6000),['portfolio-profile',process.env.SUPABASE_URL||'unconfigured'],{revalidate:60,tags:['portfolio-content']});
+async function loadProfile(fresh=false):Promise<Profile>{if(!configured())return defaultProfile;if(fresh)return readProfile();try{return await cachedProfile()}catch{return defaultProfile}}
 export async function saveProfile(p:Profile):Promise<Profile>{try{const row=await rest('rpc/portfolio_save_profile',{method:'POST',body:JSON.stringify({payload:p})});return{...defaultProfile,...row.value,revision:row.revision}}catch(e){if(['23505','40001'].includes((e as {code:string}).code))throw new ContentError('Your profile changed in another window. Reload before saving.',409);throw e}}
 export type Asset={id:string;object_key:string;filename:string;content_type:string;size:number;created_at:string};
 export async function getAsset(id:string):Promise<Asset|null>{if(!configured())return null;return(await rest('portfolio_assets?select=*'+filter('id',id)+'&limit=1'))[0]||null}
@@ -29,3 +30,7 @@ const BUCKET='portfolio-files';
 export async function createAsset(filename:string,contentType:string,bytes:Uint8Array):Promise<Asset>{const id=crypto.randomUUID();const a:Asset={id,object_key:id,filename,content_type:contentType,size:bytes.length,created_at:new Date().toISOString()};await service('/storage/v1/object/'+BUCKET+'/'+id,{method:'POST',headers:{'Content-Type':contentType,'x-upsert':'false'},body:bytes as BodyInit});try{await rest('portfolio_assets',{method:'POST',body:JSON.stringify(a)})}catch(e){await service('/storage/v1/object/'+BUCKET,{method:'DELETE',body:JSON.stringify({prefixes:[id]})}).catch(()=>{});throw e}return a}
 export async function readAsset(a:Asset){const r=await service('/storage/v1/object/authenticated/'+BUCKET+'/'+encodeURIComponent(a.object_key));return {body:r.body}}
 export async function listAssets():Promise<Asset[]>{return allRows('portfolio_assets?select=*&order=id.asc')}
+
+// Deduplicate layout/page profile reads within one render. Admin reads stay fresh.
+const renderProfile=cache(()=>loadProfile(false));
+export function getProfile(fresh=false):Promise<Profile>{return fresh?loadProfile(true):renderProfile()}

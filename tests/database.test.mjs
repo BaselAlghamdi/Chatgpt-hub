@@ -11,3 +11,13 @@ test('atomic save, stale edit rejection, missing asset rollback, publish and unp
 test('duplicate slugs cannot overwrite records',async()=>{await save(payload);await assert.rejects(save(payload),e=>e.code==='23505')});
 test('profile revisions prevent lost updates',async()=>{const r=await db.query("select public.portfolio_save_profile($1::jsonb) as result",[JSON.stringify({revision:0,name:'Owner'})]);assert.equal(r.rows[0].result.revision,1);await assert.rejects(db.query("select public.portfolio_save_profile($1::jsonb)",[JSON.stringify({revision:0,name:'Other'})]),e=>e.code==='23505');const next=await db.query("select public.portfolio_save_profile($1::jsonb) as result",[JSON.stringify({revision:1,name:'Updated'})]);assert.equal(next.rows[0].result.revision,2)});
 test('anonymous and authenticated browser roles cannot read or mutate tables or RPCs',async()=>{for(const role of ['anon','authenticated']){await db.exec('set role '+role);await assert.rejects(db.query('select * from public.portfolio_entries'),e=>e.code==='42501');await assert.rejects(db.query("select public.portfolio_save_entry($1::jsonb,'{}'::uuid[])",[JSON.stringify(payload)]),e=>e.code==='42501');await db.exec('reset role')}const rows=await db.query("select relname,relrowsecurity from pg_class where relname in ('portfolio_entries','portfolio_assets','portfolio_entry_assets','portfolio_settings')");assert.equal(rows.rows.length,4);assert.ok(rows.rows.every(r=>r.relrowsecurity));assert.equal((await db.query("select public from storage.buckets where id='portfolio-files'")).rows[0].public,false)});
+test('first research publishes once and rerunning never overwrites author edits',async()=>{
+ const script=readFileSync(new URL('../supabase/publish-first-research.sql',import.meta.url),'utf8');
+ await db.exec(script);
+ const row=(await db.query("select * from public.portfolio_entries where slug='growth-is-not-value'")).rows[0];
+ assert.equal(row.status,'published');assert.match(row.data.body,/## A worked example/);assert.match(row.data.body,/\| Incremental net present value \| 20 \| 0 \| -20 \|/);
+ await db.query("update public.portfolio_entries set title='Author edit' where id=$1",[row.id]);
+ await db.exec(script);
+ const after=(await db.query("select * from public.portfolio_entries where slug='growth-is-not-value'")).rows;
+ assert.equal(after.length,1);assert.equal(after[0].title,'Author edit');
+});
